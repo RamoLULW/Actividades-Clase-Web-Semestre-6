@@ -1,12 +1,15 @@
 import { useState } from "react"
 import { Box, TextField, Button, Typography, Paper } from "@mui/material"
 
+const API_URL = 'http://localhost:8000'
+
 function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (username.trim() === '' || password.trim() === '') {
@@ -14,8 +17,34 @@ function LoginForm({ onLogin }) {
       return
     }
 
-    setError('')
-    onLogin(username)
+    try {
+        setLoading(true)
+        setError('')
+
+        const response = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username,
+                password,
+            }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.login) {
+            setError(data.msg || 'Login failed')
+            return
+        }
+
+        onLogin(data.user.username)
+    }   catch {
+        setError('Could  not connect to the backend')
+    }   finally {
+        setLoading(false)
+    }
     }
 
     return (
@@ -47,8 +76,8 @@ function LoginForm({ onLogin }) {
                         {error}
                     </Typography>
                 )}
-                <Button type="submit" variant="contained" color="primary">
-                    Login
+                <Button type="submit" variant="contained" color="primary" disabled={loading}>
+                    {loading ? 'Loading...' : 'Login'}
                 </Button>
             </Box>
         </Paper>
