@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { 
     Container, 
     Typography, 
@@ -11,10 +11,9 @@ import {
     ListItem,
     ListItemText, 
 } from "@mui/material"
+import { API_URL, createAuthHeaders } from "../config/api"
 
-const API_URL = 'http://localhost:8000'
-
-function HomePage({ username }) {
+function HomePage({ username, token, onUnauthorized }) {
     const [users, setUsers] = useState([])
     const [name, setName] = useState('')
     const [newUsername, setNewUsername] = useState('')
@@ -23,11 +22,18 @@ function HomePage({ username }) {
     const [message, setMessage] = useState('')
     const [loading, setLoading] = useState(true)
 
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         try {
             setLoading(true)
-            const response = await fetch(`${API_URL}/users`)
+            const response = await fetch(`${API_URL}/users`, {
+                headers: createAuthHeaders(token),
+            })
             const data = await response.json()
+
+            if (response.status === 401) {
+                onUnauthorized()
+                return
+            }
 
             if (!response.ok) {
                 setError(data.error || 'Could not load users')
@@ -41,11 +47,11 @@ function HomePage({ username }) {
         }   finally {
             setLoading(false)
         }
-    }
+    }, [onUnauthorized, token])
 
     useEffect(() => {
         loadUsers()
-    }, [])
+    }, [loadUsers])
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -58,9 +64,7 @@ function HomePage({ username }) {
         try {
             const response = await fetch(`${API_URL}/users`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: createAuthHeaders(token, true),
                 body: JSON.stringify({
                     name,
                     username: newUsername,
@@ -69,6 +73,11 @@ function HomePage({ username }) {
             })
 
             const data = await response.json()
+
+            if (response.status === 401) {
+                onUnauthorized()
+                return
+            }
 
             if(!response.ok) {
                 setError(data.error || 'Could not create user')
@@ -92,9 +101,15 @@ function HomePage({ username }) {
         try {
             const response = await fetch(`${API_URL}/users/${id}`, {
                 method: 'DELETE',
+                headers: createAuthHeaders(token),
             })
 
             const data = await response.json()
+
+            if (response.status === 401) {
+                onUnauthorized()
+                return
+            }
 
             if(!response.ok) {
                 setError(data.error || 'Could not delete user')

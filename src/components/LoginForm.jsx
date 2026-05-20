@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Box, TextField, Button, Typography, Paper } from "@mui/material"
-
-const API_URL = 'http://localhost:8000'
+import { API_URL } from "../config/api"
 
 function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -34,12 +33,12 @@ function LoginForm({ onLogin }) {
 
         const data = await response.json()
 
-        if (!response.ok || !data.login) {
+        if (!response.ok || !data.login || !data.token) {
             setError(data.msg || 'Login failed')
             return
         }
 
-        onLogin(data.user.username)
+        onLogin({ user: data.user, token: data.token })
     }   catch {
         setError('Could  not connect to the backend')
     }   finally {
