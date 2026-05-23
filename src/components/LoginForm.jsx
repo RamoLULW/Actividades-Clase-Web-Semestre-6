@@ -11,7 +11,10 @@ function LoginForm({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (username.trim() === '' || password.trim() === '') {
+    const trimmedUsername = username.trim()
+    const trimmedPassword = password.trim()
+
+    if (trimmedUsername === '' || trimmedPassword === '') {
       setError('Please enter both username and password')
       return
     }
@@ -26,21 +29,21 @@ function LoginForm({ onLogin }) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                username,
-                password,
+                username: trimmedUsername,
+                password: trimmedPassword,
             }),
         })
 
         const data = await response.json()
 
         if (!response.ok || !data.login || !data.token) {
-            setError(data.msg || 'Login failed')
+            setError(data.msg || data.error || 'Login failed')
             return
         }
 
         onLogin({ user: data.user, token: data.token })
     }   catch {
-        setError('Could  not connect to the backend')
+        setError('Could not connect to the backend')
     }   finally {
         setLoading(false)
     }

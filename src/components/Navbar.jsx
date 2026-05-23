@@ -9,7 +9,7 @@ function Navbar({ username, onLogout }) {
                 Aplicacion para clase de web
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 2, alighnItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <Button color="inherit" component={Link} to="/">
                     Home
                 </Button>

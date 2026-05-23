@@ -1,227 +1,330 @@
 import { useCallback, useEffect, useState } from "react"
-import { 
-    Container, 
-    Typography, 
-    Paper, 
-    Box,
-    TextField,
-    Button,
-    Stack,
-    List,
-    ListItem,
-    ListItemText, 
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  List,
+  ListItem,
+  ListItemText,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material"
 import { API_URL, createAuthHeaders } from "../config/api"
 
+const emptyForm = {
+  name: "",
+  username: "",
+  password: "",
+}
+
 function HomePage({ username, token, onUnauthorized }) {
-    const [users, setUsers] = useState([])
-    const [name, setName] = useState('')
-    const [newUsername, setNewUsername] = useState('')
-    const [password, setPassword] = useState('')
-    const [error, setError] = useState('')
-    const [message, setMessage] = useState('')
-    const [loading, setLoading] = useState(true)
+  const [users, setUsers] = useState([])
+  const [form, setForm] = useState(emptyForm)
+  const [editingUserId, setEditingUserId] = useState("")
+  const [error, setError] = useState("")
+  const [message, setMessage] = useState("")
+  const [loadingUsers, setLoadingUsers] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deletingUserId, setDeletingUserId] = useState("")
 
-    const loadUsers = useCallback(async () => {
-        try {
-            setLoading(true)
-            const response = await fetch(`${API_URL}/users`, {
-                headers: createAuthHeaders(token),
-            })
-            const data = await response.json()
+  const isEditing = editingUserId !== ""
 
-            if (response.status === 401) {
-                onUnauthorized()
-                return
-            }
+  const resetForm = useCallback(() => {
+    setForm(emptyForm)
+    setEditingUserId("")
+  }, [])
 
-            if (!response.ok) {
-                setError(data.error || 'Could not load users')
-                return
-            }
+  const loadUsers = useCallback(async () => {
+    try {
+      setLoadingUsers(true)
+      setError("")
 
-            setUsers(data)
-            setError('')
-        }   catch{
-            setError('Could not connect to the backend')
-        }   finally {
-            setLoading(false)
-        }
-    }, [onUnauthorized, token])
+      const response = await fetch(`${API_URL}/users`, {
+        headers: createAuthHeaders(token),
+      })
+      const data = await response.json()
 
-    useEffect(() => {
-        loadUsers()
-    }, [loadUsers])
+      if (response.status === 401) {
+        onUnauthorized()
+        return
+      }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
+      if (!response.ok) {
+        setError(data.error || "Could not load users")
+        return
+      }
 
-        if (!name.trim() || !newUsername.trim() || !password.trim()) {
-            setError('Complete all fields')
-            return
-        }
+      setUsers(data)
+    } catch {
+      setError("Could not connect to the backend")
+    } finally {
+      setLoadingUsers(false)
+    }
+  }, [onUnauthorized, token])
 
-        try {
-            const response = await fetch(`${API_URL}/users`, {
-                method: 'POST',
-                headers: createAuthHeaders(token, true),
-                body: JSON.stringify({
-                    name,
-                    username: newUsername,
-                    password,
-                }),
-            })
+  useEffect(() => {
+    loadUsers()
+  }, [loadUsers])
 
-            const data = await response.json()
+  const handleChange = (field) => (event) => {
+    const nextValue = event.target.value
 
-            if (response.status === 401) {
-                onUnauthorized()
-                return
-            }
+    setForm((currentForm) => ({
+      ...currentForm,
+      [field]: nextValue,
+    }))
+  }
 
-            if(!response.ok) {
-                setError(data.error || 'Could not create user')
-                setMessage('')
-                return
-            }
+  const handleSubmit = async (event) => {
+    event.preventDefault()
 
-            setUsers((currentUsers) => [...currentUsers, data])
-            setName('')
-            setNewUsername('')
-            setPassword('')
-            setError('')
-            setMessage('User created successfully')
-        }   catch {
-            setError('Could not connect to the backend')
-            setMessage('')
-        }
+    const payload = {
+      name: form.name.trim(),
+      username: form.username.trim(),
     }
 
-    const handleDelete = async (id) => {
-        try {
-            const response = await fetch(`${API_URL}/users/${id}`, {
-                method: 'DELETE',
-                headers: createAuthHeaders(token),
-            })
-
-            const data = await response.json()
-
-            if (response.status === 401) {
-                onUnauthorized()
-                return
-            }
-
-            if(!response.ok) {
-                setError(data.error || 'Could not delete user')
-                setMessage('')
-                return
-            }
-
-            setUsers((currentUsers) => currentUsers.filter((user) => user._id !== id))
-            setError('')
-            setMessage('User deleted successfully')
-        }   catch {
-            setError('Could not connect to the backend')
-            setMessage('')
-        }
+    if (!payload.name || !payload.username) {
+      setError("Name and username are required")
+      setMessage("")
+      return
     }
 
-    return (
-        <Container maxWidth="md" sx={{ mt: 4 }}>
-            <Paper elevation={3} sx={{ padding: 4, mb: 3 }}>
-                <Typography variant="h3" gutterBottom>
-                    Bienvenido, {username}
-                </Typography>
+    if (isEditing) {
+      if (form.password.trim()) {
+        payload.password = form.password
+      }
+    } else if (!form.password.trim()) {
+      setError("Password is required to create a user")
+      setMessage("")
+      return
+    } else {
+      payload.password = form.password
+    }
 
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                    Esta es la página donde puedes ver, agregar y eliminar usuarios.
-                </Typography>
-            </Paper>
+    try {
+      setSaving(true)
+      setError("")
+      setMessage("")
 
-            <Paper elevation={3} sx={{ padding: 4, mb: 3}}>
-                <Typography variant="h5" gutterBottom>
-                    Agregar usuario
-                </Typography>
+      const response = await fetch(
+        isEditing ? `${API_URL}/users/${editingUserId}` : `${API_URL}/users`,
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: createAuthHeaders(token, true),
+          body: JSON.stringify(payload),
+        }
+      )
+      const data = await response.json()
 
-                <Box
-                    component="form"
-                    onSubmit={handleSubmit}
-                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
-                >
-                    <TextField
-                        label="Name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                    />
-                    <TextField
-                        label="Username"
-                        value={newUsername}
-                        onChange={(e) => setNewUsername(e.target.value)}
-                    />
-                    <TextField
-                        label="Password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <Button type="submit" variant="contained">
-                        Agregar
+      if (response.status === 401) {
+        onUnauthorized()
+        return
+      }
+
+      if (!response.ok) {
+        setError(data.error || "Could not save user")
+        return
+      }
+
+      if (isEditing) {
+        setUsers((currentUsers) =>
+          currentUsers.map((user) => (user._id === data._id ? data : user))
+        )
+        setMessage("User updated successfully")
+      } else {
+        setUsers((currentUsers) => [...currentUsers, data])
+        setMessage("User created successfully")
+      }
+
+      resetForm()
+    } catch {
+      setError("Could not connect to the backend")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEdit = (user) => {
+    setForm({
+      name: user.name || "",
+      username: user.username || "",
+      password: "",
+    })
+    setEditingUserId(user._id)
+    setError("")
+    setMessage("")
+  }
+
+  const handleCancelEdit = () => {
+    resetForm()
+    setError("")
+    setMessage("")
+  }
+
+  const handleDelete = async (user) => {
+    try {
+      setDeletingUserId(user._id)
+      setError("")
+      setMessage("")
+
+      const response = await fetch(`${API_URL}/users/${user._id}`, {
+        method: "DELETE",
+        headers: createAuthHeaders(token),
+      })
+      const data = await response.json()
+
+      if (response.status === 401) {
+        onUnauthorized()
+        return
+      }
+
+      if (!response.ok) {
+        setError(data.error || "Could not delete user")
+        return
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.filter((currentUser) => currentUser._id !== user._id)
+      )
+
+      if (editingUserId === user._id) {
+        resetForm()
+      }
+
+      setMessage("User deleted successfully")
+    } catch {
+      setError("Could not connect to the backend")
+    } finally {
+      setDeletingUserId("")
+    }
+  }
+
+  return (
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
+        <Typography variant="h3" gutterBottom>
+          Bienvenido, {username}
+        </Typography>
+
+        <Typography variant="body1">
+          Aqui puedes consultar, crear, editar y eliminar usuarios usando el
+          backend protegido con JWT.
+        </Typography>
+      </Paper>
+
+      <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
+        <Typography variant="h5" gutterBottom>
+          {isEditing ? "Editar usuario" : "Agregar usuario"}
+        </Typography>
+
+        <Box
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+        >
+          <TextField
+            label="Name"
+            value={form.name}
+            onChange={handleChange("name")}
+            disabled={saving}
+          />
+          <TextField
+            label="Username"
+            value={form.username}
+            onChange={handleChange("username")}
+            disabled={saving}
+          />
+          <TextField
+            label={isEditing ? "New password (optional)" : "Password"}
+            type="password"
+            value={form.password}
+            onChange={handleChange("password")}
+            disabled={saving}
+            helperText={
+              isEditing
+                ? "Leave it empty to keep the current password"
+                : "Required for new users"
+            }
+          />
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving
+                ? isEditing
+                  ? "Saving..."
+                  : "Creating..."
+                : isEditing
+                  ? "Save changes"
+                  : "Add user"}
+            </Button>
+
+            {isEditing && (
+              <Button variant="outlined" onClick={handleCancelEdit} disabled={saving}>
+                Cancel
+              </Button>
+            )}
+          </Stack>
+        </Box>
+
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        {message && <Alert severity="success" sx={{ mt: 2 }}>{message}</Alert>}
+      </Paper>
+
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", sm: "center" }}
+          spacing={2}
+          mb={2}
+        >
+          <Typography variant="h5">Lista de usuarios</Typography>
+          <Button variant="outlined" onClick={loadUsers} disabled={loadingUsers}>
+            {loadingUsers ? "Loading..." : "Reload"}
+          </Button>
+        </Stack>
+
+        {loadingUsers ? (
+          <Typography>Cargando usuarios...</Typography>
+        ) : users.length === 0 ? (
+          <Typography>No hay usuarios todavia.</Typography>
+        ) : (
+          <List>
+            {users.map((user) => (
+              <ListItem
+                key={user._id}
+                divider
+                secondaryAction={
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleEdit(user)}
+                      disabled={saving || deletingUserId === user._id}
+                    >
+                      Edit
                     </Button>
-                </Box>
-
-                {error && (
-                    <Typography color="error" sx={{ mt: 2 }}>
-                        {error}
-                    </Typography>
-                )}
-
-                {message && (
-                    <Typography color="primary" sx={{ mt: 2 }}>
-                        {message}
-                    </Typography>
-                )}
-            </Paper>
-
-            <Paper elevation={3} sx={{ padding: 4 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="h5">
-                        Lista de usuarios
-                    </Typography>
-                    <Button variant="outlined" onClick={loadUsers}>
-                        Recargar
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      onClick={() => handleDelete(user)}
+                      disabled={deletingUserId === user._id}
+                    >
+                      {deletingUserId === user._id ? "Deleting..." : "Delete"}
                     </Button>
-                </Stack>
-
-                {loading ? (
-                    <Typography>Cargando usuarios...</Typography>
-                ) : users.length === 0 ? (
-                    <Typography>No hay usuarios todavia.</Typography>
-                ) : (
-                    <List>
-                        {users.map((user) => (
-                            <ListItem
-                                key={user._id}
-                                secondaryAction={
-                                    <Button
-                                        color="error"
-                                        variant="outlined"
-                                        onClick={() => handleDelete(user._id)}
-                                    >
-                                        Eliminar
-                                    </Button>
-                                }
-                            >
-                                <ListItemText
-                                    primary={user.name}
-                                    secondary={user.username}
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
-            </Paper>
-        </Container>
-    )
+                  </Stack>
+                }
+              >
+                <ListItemText primary={user.name} secondary={user.username} />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Paper>
+    </Container>
+  )
 }
 
 export default HomePage
