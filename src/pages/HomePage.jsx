@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react"
+import React from "react"
 import {
   Alert,
   Box,
   Button,
+  Chip,
   Container,
   List,
   ListItem,
@@ -12,207 +13,87 @@ import {
   TextField,
   Typography,
 } from "@mui/material"
-import { API_URL, createAuthHeaders } from "../config/api"
+import { Link } from "react-router-dom"
+import LifecycleDemo from "../components/LifecycleDemo"
+import useAdmin from "../hooks/useAdmin"
+import useUserDirectory from "../hooks/useUserDirectory"
 
-const emptyForm = {
-  name: "",
-  username: "",
-  password: "",
-}
-
-function HomePage({ username, token, onUnauthorized }) {
-  const [users, setUsers] = useState([])
-  const [form, setForm] = useState(emptyForm)
-  const [editingUserId, setEditingUserId] = useState("")
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
-  const [loadingUsers, setLoadingUsers] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [deletingUserId, setDeletingUserId] = useState("")
-
-  const isEditing = editingUserId !== ""
-
-  const resetForm = useCallback(() => {
-    setForm(emptyForm)
-    setEditingUserId("")
-  }, [])
-
-  const loadUsers = useCallback(async () => {
-    try {
-      setLoadingUsers(true)
-      setError("")
-
-      const response = await fetch(`${API_URL}/users`, {
-        headers: createAuthHeaders(token),
-      })
-      const data = await response.json()
-
-      if (response.status === 401) {
-        onUnauthorized()
-        return
-      }
-
-      if (!response.ok) {
-        setError(data.error || "Could not load users")
-        return
-      }
-
-      setUsers(data)
-    } catch {
-      setError("Could not connect to the backend")
-    } finally {
-      setLoadingUsers(false)
-    }
-  }, [onUnauthorized, token])
-
-  useEffect(() => {
-    loadUsers()
-  }, [loadUsers])
-
-  const handleChange = (field) => (event) => {
-    const nextValue = event.target.value
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      [field]: nextValue,
-    }))
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-
-    const payload = {
-      name: form.name.trim(),
-      username: form.username.trim(),
-    }
-
-    if (!payload.name || !payload.username) {
-      setError("Name and username are required")
-      setMessage("")
-      return
-    }
-
-    if (isEditing) {
-      if (form.password.trim()) {
-        payload.password = form.password
-      }
-    } else if (!form.password.trim()) {
-      setError("Password is required to create a user")
-      setMessage("")
-      return
-    } else {
-      payload.password = form.password
-    }
-
-    try {
-      setSaving(true)
-      setError("")
-      setMessage("")
-
-      const response = await fetch(
-        isEditing ? `${API_URL}/users/${editingUserId}` : `${API_URL}/users`,
-        {
-          method: isEditing ? "PUT" : "POST",
-          headers: createAuthHeaders(token, true),
-          body: JSON.stringify(payload),
-        }
-      )
-      const data = await response.json()
-
-      if (response.status === 401) {
-        onUnauthorized()
-        return
-      }
-
-      if (!response.ok) {
-        setError(data.error || "Could not save user")
-        return
-      }
-
-      if (isEditing) {
-        setUsers((currentUsers) =>
-          currentUsers.map((user) => (user._id === data._id ? data : user))
-        )
-        setMessage("User updated successfully")
-      } else {
-        setUsers((currentUsers) => [...currentUsers, data])
-        setMessage("User created successfully")
-      }
-
-      resetForm()
-    } catch {
-      setError("Could not connect to the backend")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleEdit = (user) => {
-    setForm({
-      name: user.name || "",
-      username: user.username || "",
-      password: "",
-    })
-    setEditingUserId(user._id)
-    setError("")
-    setMessage("")
-  }
-
-  const handleCancelEdit = () => {
-    resetForm()
-    setError("")
-    setMessage("")
-  }
-
-  const handleDelete = async (user) => {
-    try {
-      setDeletingUserId(user._id)
-      setError("")
-      setMessage("")
-
-      const response = await fetch(`${API_URL}/users/${user._id}`, {
-        method: "DELETE",
-        headers: createAuthHeaders(token),
-      })
-      const data = await response.json()
-
-      if (response.status === 401) {
-        onUnauthorized()
-        return
-      }
-
-      if (!response.ok) {
-        setError(data.error || "Could not delete user")
-        return
-      }
-
-      setUsers((currentUsers) =>
-        currentUsers.filter((currentUser) => currentUser._id !== user._id)
-      )
-
-      if (editingUserId === user._id) {
-        resetForm()
-      }
-
-      setMessage("User deleted successfully")
-    } catch {
-      setError("Could not connect to the backend")
-    } finally {
-      setDeletingUserId("")
-    }
-  }
+function HomePage({ auth, username, token, onUnauthorized }) {
+  const [showLifecycle, setShowLifecycle] = React.useState(true)
+  const { isAdmin, label } = useAdmin(auth)
+  const {
+    users,
+    form,
+    error,
+    message,
+    isEditing,
+    loadingUsers,
+    saving,
+    deletingUserId,
+    editingUserId,
+    handleChange,
+    loadUsers,
+    saveUser,
+    startEditing,
+    cancelEditing,
+    deleteUser,
+  } = useUserDirectory(token, onUnauthorized)
 
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
-        <Typography variant="h3" gutterBottom>
-          Bienvenido, {username}
-        </Typography>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={2}
+          mb={2}
+        >
+          <Typography variant="h3">Bienvenido, {username}</Typography>
+          <Chip label={label} color={isAdmin ? "success" : "primary"} />
+        </Stack>
 
-        <Typography variant="body1">
+        <Typography variant="body1" sx={{ mb: 2 }}>
           Aqui puedes consultar, crear, editar y eliminar usuarios usando el
           backend protegido con JWT.
         </Typography>
+
+        <Typography variant="body2">
+          Esta pantalla ahora incluye hooks personalizados, rutas dinamicas y un
+          componente de ciclo de vida para la actividad.
+        </Typography>
+      </Paper>
+
+      <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", sm: "center" }}
+          spacing={2}
+          mb={2}
+        >
+          <Typography variant="h5">Lifecycle with useEffect</Typography>
+          <Button
+            variant="outlined"
+            onClick={() => setShowLifecycle((currentValue) => !currentValue)}
+          >
+            {showLifecycle ? "Unmount component" : "Mount component"}
+          </Button>
+        </Stack>
+
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          Toggle this section and edit different users to see the mount, update,
+          and unmount messages in the browser console.
+        </Typography>
+
+        {showLifecycle ? (
+          <LifecycleDemo
+            label="selected user id"
+            trackedValue={editingUserId || "none"}
+          />
+        ) : (
+          <Alert severity="info">The lifecycle demo is currently unmounted.</Alert>
+        )}
       </Paper>
 
       <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
@@ -222,7 +103,7 @@ function HomePage({ username, token, onUnauthorized }) {
 
         <Box
           component="form"
-          onSubmit={handleSubmit}
+          onSubmit={saveUser}
           sx={{ display: "flex", flexDirection: "column", gap: 2 }}
         >
           <TextField
@@ -262,15 +143,23 @@ function HomePage({ username, token, onUnauthorized }) {
             </Button>
 
             {isEditing && (
-              <Button variant="outlined" onClick={handleCancelEdit} disabled={saving}>
+              <Button variant="outlined" onClick={cancelEditing} disabled={saving}>
                 Cancel
               </Button>
             )}
           </Stack>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-        {message && <Alert severity="success" sx={{ mt: 2 }}>{message}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {message && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            {message}
+          </Alert>
+        )}
       </Paper>
 
       <Paper elevation={3} sx={{ p: 4 }}>
@@ -281,7 +170,12 @@ function HomePage({ username, token, onUnauthorized }) {
           spacing={2}
           mb={2}
         >
-          <Typography variant="h5">Lista de usuarios</Typography>
+          <div>
+            <Typography variant="h5">Lista de usuarios</Typography>
+            <Typography variant="body2">
+              Use the details button to open a dynamic route for each user.
+            </Typography>
+          </div>
           <Button variant="outlined" onClick={loadUsers} disabled={loadingUsers}>
             {loadingUsers ? "Loading..." : "Reload"}
           </Button>
@@ -300,8 +194,16 @@ function HomePage({ username, token, onUnauthorized }) {
                 secondaryAction={
                   <Stack direction="row" spacing={1}>
                     <Button
+                      component={Link}
+                      to={`/users/${user._id}`}
+                      state={{ user }}
+                      variant="contained"
+                    >
+                      Details
+                    </Button>
+                    <Button
                       variant="outlined"
-                      onClick={() => handleEdit(user)}
+                      onClick={() => startEditing(user)}
                       disabled={saving || deletingUserId === user._id}
                     >
                       Edit
@@ -309,7 +211,7 @@ function HomePage({ username, token, onUnauthorized }) {
                     <Button
                       color="error"
                       variant="outlined"
-                      onClick={() => handleDelete(user)}
+                      onClick={() => deleteUser(user)}
                       disabled={deletingUserId === user._id}
                     >
                       {deletingUserId === user._id ? "Deleting..." : "Delete"}
@@ -317,7 +219,10 @@ function HomePage({ username, token, onUnauthorized }) {
                   </Stack>
                 }
               >
-                <ListItemText primary={user.name} secondary={user.username} />
+                <ListItemText
+                  primary={user.name}
+                  secondary={`${user.username} | ID: ${user._id}`}
+                />
               </ListItem>
             ))}
           </List>
